@@ -1,0 +1,552 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "variables": {
+    "webApiVersion": "2016-08-01",
+    "serverFarmApiVersion": "2016-09-01", 
+    "dbApiVersion": "2014-04-01-preview",
+    "networkVersion": "2017-06-01",
+    "siteExtensionsApiVersion": "2015-08-01",
+    "certificateApiVersion": "2016-03-01",
+    "cmHostingPlanNameTidy": "[toLower(trim(parameters('cmHostingPlanName')))]",
+    "cdHostingPlanNameTidy": "[toLower(trim(parameters('cdHostingPlanName')))]",
+    "prcHostingPlanNameTidy": "[toLower(trim(parameters('prcHostingPlanName')))]",
+    "repHostingPlanNameTidy": "[toLower(trim(parameters('repHostingPlanName')))]",
+    "cmWebAppNameTidy": "[toLower(trim(parameters('cmWebAppName')))]",
+    "cdWebAppNameTidy": "[toLower(trim(parameters('cdWebAppName')))]",
+    "prcWebAppNameTidy": "[toLower(trim(parameters('prcWebAppName')))]",
+    "repWebAppNameTidy": "[toLower(trim(parameters('repWebAppName')))]",
+    "cmStagingSlotNameTidy": "[toLower(trim(parameters('cmStagingSlotName')))]",
+    "cdStagingSlotNameTidy": "[toLower(trim(parameters('cdStagingSlotName')))]",
+    "dbServerNameTidy": "[toLower(trim(parameters('sqlServerName')))]",
+    "webDbServerNameTidy": "[toLower(trim(parameters('webSqlServerName')))]",
+    "coreDbNameTidy": "[toLower(trim(parameters('coreSqlDatabaseName')))]",
+    "webDbNameTidy": "[toLower(trim(parameters('webSqlDatabaseName')))]",
+    "masterDbNameTidy": "[toLower(trim(parameters('masterSqlDatabaseName')))]",
+    "sslCertificateNameTidy": "[toLower(trim(parameters('sslCertificateName')))]",
+    "SKUs": {
+      "CmHostingPlan": {
+        "name": "S2",
+        "capacity": 2
+      },
+      "CdHostingPlan": {
+        "name": "S2",
+        "capacity": 2
+      },
+      "PrcHostingPlan": {
+        "name": "S1",
+        "capacity": 1
+      },
+      "RepHostingPlan": {
+        "name": "S1",
+        "capacity": 1
+      }
+    },
+    "sitecoreTags": {
+      "provider": "b51535c2-ab3e-4a68-95f8-e2e3c9a19299"
+    }
+  },
+  "parameters": {
+    "deploymentId": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]"
+    },
+    "location": {
+      "type": "string"
+    },
+    
+    "passwordSalt": {
+      "type": "securestring",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().id]"
+    },
+    
+    "sqlServerName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-sql')]"
+    },
+    "webSqlServerName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-web-sql')]"
+    },
+    "coreSqlDatabaseName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-core-db')]"
+    },
+    "masterSqlDatabaseName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-master-db')]"
+    },
+    "webSqlDatabaseName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-web-db')]"
+    },
+    
+    "cmHostingPlanName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-cm-hp')]"
+    },
+    "cmWebAppName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-cm')]"
+    },
+    "cmWebAppHostnames": {
+      "type": "array",
+      "defaultValue": []
+    },
+    "cmStagingSlotName": {
+      "type": "string",
+      "defaultValue": "cm-staging"
+    },
+    "cmStagingHostnames": {
+      "type": "array",
+      "defaultValue": []
+    },
+    
+    "cdHostingPlanName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-cd-hp')]"
+    },
+    "cdWebAppName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-cd')]"
+    },
+    "cdWebAppHostnames": {
+      "type": "array",
+      "defaultValue": []
+    },
+    "cdStagingSlotName": {
+      "type": "string",
+      "defaultValue": "cd-staging"
+    },
+    "cdStagingHostnames": {
+      "type": "array",
+      "defaultValue": []
+    },
+    
+    "prcHostingPlanName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-prc-hp')]"
+    },
+    "prcWebAppName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-prc')]"
+    },
+    "prcWebAppHostnames": {
+      "type": "array",
+      "defaultValue": []
+    },
+    "prcStagingHostnames": {
+      "type": "array",
+      "defaultValue": []
+    },
+    "prcCoreSqlDatabaseUserName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "prccoreuser"
+    },
+    "prcCoreSqlDatabasePassword": {
+      "type": "securestring",
+      "minLength": 8,
+      "defaultValue": "[concat(uniquestring(parameters('prcCoreSqlDatabaseUserName'), parameters('passwordSalt')), toUpper(uniquestring(parameters('prcCoreSqlDatabaseUserName'), parameters('passwordSalt'), parameters('sqlServerPassword'))), uniquestring(parameters('prcCoreSqlDatabaseUserName'), parameters('passwordSalt')))]"
+    },
+    "prcMasterSqlDatabaseUserName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "prcmasteruser"
+    },
+    "prcMasterSqlDatabasePassword": {
+      "type": "securestring",
+      "minLength": 8,
+      "defaultValue": "[concat(uniquestring(parameters('prcMasterSqlDatabaseUserName'), parameters('passwordSalt')), toUpper(uniquestring(parameters('prcMasterSqlDatabaseUserName'), parameters('passwordSalt'), parameters('sqlServerPassword'))), uniquestring(parameters('prcMasterSqlDatabaseUserName'), parameters('passwordSalt')))]"
+    },
+    "prcWebSqlDatabaseUserName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "prcwebuser"
+    },
+    "prcWebSqlDatabasePassword": {
+      "type": "securestring",
+      "minLength": 8,
+      "defaultValue": "[concat(uniquestring(parameters('prcWebSqlDatabaseUserName'), parameters('passwordSalt')), toUpper(uniquestring(parameters('prcWebSqlDatabaseUserName'), parameters('passwordSalt'), parameters('sqlServerPassword'))), uniquestring(parameters('prcWebSqlDatabaseUserName'), parameters('passwordSalt')))]"
+    },
+    
+    "repHostingPlanName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-rep-hp')]"
+    },
+    "repWebAppName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-rep')]"
+    },
+    "repWebAppHostnames": {
+      "type": "array",
+      "defaultValue": []
+    },
+    "repStagingHostnames": {
+      "type": "array",
+      "defaultValue": []
+    },
+    "repCoreSqlDatabaseUserName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "repcoreuser"
+    },
+    "repCoreSqlDatabasePassword": {
+      "type": "securestring",
+      "minLength": 8,
+      "defaultValue": "[concat(uniquestring(parameters('repCoreSqlDatabaseUserName'), parameters('passwordSalt')), toUpper(uniquestring(parameters('repCoreSqlDatabaseUserName'), parameters('passwordSalt'), parameters('sqlServerPassword'))), uniquestring(parameters('repCoreSqlDatabaseUserName'), parameters('passwordSalt')))]"
+    },
+    "repMasterSqlDatabaseUserName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "repmasteruser"
+    },
+    "repMasterSqlDatabasePassword": {
+      "type": "securestring",
+      "minLength": 8,
+      "defaultValue": "[concat(uniquestring(parameters('repMasterSqlDatabaseUserName'), parameters('passwordSalt')), toUpper(uniquestring(parameters('repMasterSqlDatabaseUserName'), parameters('passwordSalt'), parameters('sqlServerPassword'))), uniquestring(parameters('repMasterSqlDatabaseUserName'), parameters('passwordSalt')))]"
+    },
+    "repWebSqlDatabaseUserName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "repwebuser"
+    },
+    "repWebSqlDatabasePassword": {
+      "type": "securestring",
+      "minLength": 8,
+      "defaultValue": "[concat(uniquestring(parameters('repWebSqlDatabaseUserName'), parameters('passwordSalt')), toUpper(uniquestring(parameters('repWebSqlDatabaseUserName'), parameters('passwordSalt'), parameters('sqlServerPassword'))), uniquestring(parameters('repWebSqlDatabaseUserName'), parameters('passwordSalt')))]"
+    },
+    
+    "certificateName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-certificate')]"
+    },
+     "certificatePfxBase64": {
+      "type": "securestring"
+    },
+    "certificatePfxPassword": {
+      "type": "securestring"
+    },
+    "certificateHostnames": {
+      "type": "array",
+      "defaultValue": []
+    },
+    
+    "customFirewallRules": {
+      "type": "object",
+      "defaultValue": {
+        "items": []
+      }
+    },
+    "sslCertificateName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('deploymentId'), '-sslcertificate')]"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/certificates",
+      "name": "[variables('certificateNameTidy')]",
+      "apiVersion": "[variables('certificateApiVersion')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "hostNames": "[array(parameters('certificateHostnames'))]",
+        "pfxBlob": "[parameters('certificatePfxBase64')]",
+        "password": "[parameters('certificatePfxPassword')]"
+      },
+      "dependsOn": []
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "name": "[variables('cmHostingPlanNameTidy')]",
+      "apiVersion": "[variables('serverFarmApiVersion')]",
+      "sku": {
+        "name": "[variables('SKUs').CmHostingPlan.name]",
+        "capacity": "[variables('SKUs').CmHostingPlan.capacity]"
+      },
+      "properties": {
+        "name": "[variables('cmHostingPlanNameTidy')]"
+      },
+      "location": "[parameters('location')]",
+      "tags": {
+        "provider": "[variables('sitecoreTags').provider]"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "name": "[variables('cmWebAppNameTidy')]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('cmHostingPlanNameTidy'))]",
+        "siteConfig": {
+          "use32BitWorkerProcess": false,
+          "alwaysOn": true,
+          "phpVersion": "",
+          "defaultDocuments": [
+            "index.html"
+          ]
+        }
+      },
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('cmHostingPlanNameTidy'))]"
+      ],
+      "tags": {
+        "provider": "[variables('sitecoreTags').provider]"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/hostNameBindings",
+      "copy": {
+        "name": "cmHostNameBinding",
+        "mode": "serial",
+        "count": "[length(parameters('cmWebAppHostnames'))]"
+      },
+      "name": "[concat(variables('cmWebAppNameTidy'), '/', parameters('cmWebAppHostnames')[copyIndex()])]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "properties": {
+        "siteName": "[variables('cmWebAppNameTidy')]",
+        "hostNameType": "Verified",
+        "sslState": "SniEnabled",
+        "thumbprint": "[reference(resourceId('Microsoft.Web/certificates', variables('sslCertificateNameTidy'))).Thumbprint]"
+      },
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/certificates/', variables('sslCertificateNameTidy'))]",
+        "[resourceId('Microsoft.Web/sites', variables('cmHostingPlanNameTidy'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites/slots",
+      "kind": "apiApp",
+      "name": "[concat(variables('cmWebAppNameTidy'), '/', variables('cmStagingSlotNameTidy'))]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "siteConfig": {
+          "cloningInfo": {
+            "sourceWebAppId": "[resourceId('Microsoft.Web/sites', variables('cmWebAppNameTidy'))]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('cmHostingPlanNameTidy'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites/slots/hostNameBindings",
+      "copy": {
+        "name": "cmStagingHostNameBinding",
+        "mode": "serial",
+        "count": "[length(parameters('cmStagingHostnames'))]"
+      },
+      "name": "[concat(variables('cmWebAppNameTidy'), '/', variables('cmStagingSlotNameTidy'), '/', parameters('cmStagingHostnames')[copyIndex()])]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "properties": {
+        "siteName": "[concat(variables('cmWebAppNameTidy'), '(', variables('cmStagingSlotNameTidy'), ')')]",
+        "hostNameType": "Verified",
+        "sslState": "SniEnabled",
+        "thumbprint": "[reference(resourceId('Microsoft.Web/certificates', variables('sslCertificateNameTidy'))).Thumbprint]"
+      },
+      "location": "[parameters('location')]",
+      "dependsOn": [ 
+        "[resourceId('Microsoft.Web/certificates/', variables('sslCertificateNameTidy'))]",
+        "[resourceId('Microsoft.Web/serverfarms', variables('cmHostingPlanNameTidy'))]",
+        "[resourceId('Microsoft.Web/sites/slots', variables('cmWebAppNameTidy'), variables('cmStagingSlotNameTidy'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "name": "[variables('cdHostingPlanNameTidy')]",
+      "apiVersion": "[variables('serverFarmApiVersion')]",
+      "sku": {
+        "name": "[variables('SKUs').CdHostingPlan.name]",
+        "capacity": "[variables('SKUs').CdHostingPlan.capacity]"
+      },
+      "properties": {
+        "name": "[variables('cdHostingPlanNameTidy')]"
+      },
+      "location": "[parameters('location')]",
+      "tags": {
+        "provider": "[variables('sitecoreTags').provider]"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/hostNameBindings",
+      "copy": {
+        "name": "cdHostNameBinding",
+        "mode": "serial",
+        "count": "[length(parameters('cdWebAppHostnames'))]"
+      },
+      "name": "[concat(variables('cdWebAppNameTidy'), '/', parameters('cdWebAppHostnames')[copyIndex()])]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "properties": {
+        "siteName": "[variables('cdWebAppNameTidy')]",
+        "hostNameType": "Verified",
+        "sslState": "SniEnabled",
+        "thumbprint": "[reference(resourceId('Microsoft.Web/certificates', variables('sslCertificateNameTidy'))).Thumbprint]"
+      },
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/certificates/', variables('sslCertificateNameTidy'))]",
+        "[resourceId('Microsoft.Web/serverfarms', variables('cdHostingPlanNameTidy'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites/slots",
+      "kind": "apiApp",
+      "name": "[concat(variables('cdWebAppNameTidy'), '/', variables('cdStagingSlotNameTidy'))]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "siteConfig": {
+          "cloningInfo": {
+            "sourceWebAppId": "[resourceId('Microsoft.Web/sites', variables('cdWebAppNameTidy'))]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('cdHostingPlanNameTidy'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites/slots/hostNameBindings",
+      "copy": {
+        "name": "cdStagingHostNameBinding",
+        "mode": "serial",
+        "count": "[length(parameters('cdStagingHostnames'))]"
+      },
+      "name": "[concat(variables('cdWebAppNameTidy'), '/', variables('cdStagingSlotNameTidy'), '/', parameters('cdStagingHostnames')[copyIndex()])]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "properties": {
+        "siteName": "[concat(variables('cdWebAppNameTidy'), '(', variables('cdStagingSlotNameTidy'), ')')]",
+        "hostNameType": "Verified",
+        "sslState": "SniEnabled",
+        "thumbprint": "[reference(resourceId('Microsoft.Web/certificates', variables('sslCertificateNameTidy'))).Thumbprint]"
+      },
+      "location": "[parameters('location')]",
+      "dependsOn": [ 
+        "[resourceId('Microsoft.Web/certificates/', variables('sslCertificateNameTidy'))]",
+        "[resourceId('Microsoft.Web/serverfarms', variables('cdHostingPlanNameTidy'))]",
+        "[resourceId('Microsoft.Web/sites/slots', variables('cdWebAppNameTidy'), variables('cdStagingSlotNameTidy'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites/hostNameBindings",
+      "copy": {
+        "name": "prcHostNameBinding",
+        "mode": "serial",
+        "count": "[length(parameters('prcWebAppHostnames'))]"
+      },
+      "name": "[concat(variables('prcWebAppNameTidy'), '/', parameters('prcWebAppHostnames')[copyIndex()])]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "properties": {
+        "siteName": "[variables('prcWebAppNameTidy')]",
+        "hostNameType": "Verified",
+        "sslState": "SniEnabled",
+        "thumbprint": "[reference(resourceId('Microsoft.Web/certificates', variables('sslCertificateNameTidy'))).Thumbprint]"
+      },
+      "location": "[parameters('location')]",
+      "dependsOn": [ 
+        "[resourceId('Microsoft.Web/certificates/', variables('sslCertificateNameTidy'))]",
+        "[resourceId('Microsoft.Web/serverfarms', variables('prcHostingPlanNameTidy'))]" 
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites/config",
+      "name": "[concat(variables('prcWebAppNameTidy'), '/connectionstrings')]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "properties": {
+        "core": {
+          "type": "SQLAzure",
+          "value": "[concat('Encrypt=True;TrustServerCertificate=False;Data Source=', reference(if(equals(parameters('Environment'), 'DR'), resourceId(parameters('oldResourceGroup'), 'Microsoft.Sql/servers', variables('oldDbServerNameTidy')), resourceId('Microsoft.Sql/servers', variables('dbServerNameTidy'))), variables('dbApiVersion')).fullyQualifiedDomainName, ',1433;Initial Catalog=',variables('coreDbNameTidy'),';User Id=', parameters('prcCoreSqlDatabaseUserName'), ';Password=', parameters('prcCoreSqlDatabasePassword'), ';')]"
+        },
+        "master": {
+          "type": "SQLAzure",
+          "value": "[concat('Encrypt=True;TrustServerCertificate=False;Data Source=', reference(if(equals(parameters('Environment'), 'DR'), resourceId(parameters('oldResourceGroup'), 'Microsoft.Sql/servers', variables('oldDbServerNameTidy')), resourceId('Microsoft.Sql/servers', variables('dbServerNameTidy'))), variables('dbApiVersion')).fullyQualifiedDomainName, ',1433;Initial Catalog=',variables('masterDbNameTidy'),';User Id=', parameters('prcMasterSqlDatabaseUserName'), ';Password=', parameters('prcMasterSqlDatabasePassword'), ';')]"
+        },
+        "web": {
+          "type": "SQLAzure",
+          "value": "[concat('Encrypt=True;TrustServerCertificate=False;Data Source=', reference(if(equals(parameters('Environment'), 'DR'), resourceId(parameters('oldResourceGroup'), 'Microsoft.Sql/servers', variables('oldWebDbServerNameTidy')), resourceId('Microsoft.Sql/servers', variables('webDbServerNameTidy'))), variables('dbApiVersion')).fullyQualifiedDomainName, ',1433;Initial Catalog=',variables('webDbNameTidy'),';User Id=', parameters('prcWebSqlDatabaseUserName'), ';Password=', parameters('prcWebSqlDatabasePassword'), ';')]"
+        }
+      },
+      "location": "[parameters('location')]",
+      "dependsOn": [ "prcHostNameBinding" ]
+    },
+    {
+      "type": "Microsoft.Web/sites/hostNameBindings",
+      "copy": {
+        "name": "repHostNameBinding",
+        "mode": "serial",
+        "count": "[length(parameters('repWebAppHostnames'))]"
+      },
+      "name": "[concat(variables('repWebAppNameTidy'), '/', parameters('repWebAppHostnames')[copyIndex()])]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "properties": {
+        "siteName": "[variables('repWebAppNameTidy')]",
+        "hostNameType": "Verified"
+      },
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Web/sites/config",
+      "name": "[concat(variables('repWebAppNameTidy'), '/connectionstrings')]",
+      "apiVersion": "[variables('webApiVersion')]",
+      "properties": {
+        "core": {
+          "type": "SQLAzure",
+          "value": "[concat('Encrypt=True;TrustServerCertificate=False;Data Source=', reference(if(equals(parameters('Environment'), 'DR'), resourceId(parameters('oldResourceGroup'), 'Microsoft.Sql/servers', variables('oldDbServerNameTidy')), resourceId('Microsoft.Sql/servers', variables('dbServerNameTidy'))), variables('dbApiVersion')).fullyQualifiedDomainName, ',1433;Initial Catalog=',variables('coreDbNameTidy'),';User Id=', parameters('repCoreSqlDatabaseUserName'), ';Password=', parameters('repCoreSqlDatabasePassword'), ';')]"
+        },
+        "master": {
+          "type": "SQLAzure",
+          "value": "[concat('Encrypt=True;TrustServerCertificate=False;Data Source=', reference(if(equals(parameters('Environment'), 'DR'), resourceId(parameters('oldResourceGroup'), 'Microsoft.Sql/servers', variables('oldDbServerNameTidy')), resourceId('Microsoft.Sql/servers', variables('dbServerNameTidy'))), variables('dbApiVersion')).fullyQualifiedDomainName, ',1433;Initial Catalog=',variables('masterDbNameTidy'),';User Id=', parameters('repMasterSqlDatabaseUserName'), ';Password=', parameters('repMasterSqlDatabasePassword'), ';')]"
+        },
+        "web": {
+          "type": "SQLAzure",
+          "value": "[concat('Encrypt=True;TrustServerCertificate=False;Data Source=', reference(if(equals(parameters('Environment'), 'DR'), resourceId(parameters('oldResourceGroup'), 'Microsoft.Sql/servers', variables('oldWebDbServerNameTidy')), resourceId('Microsoft.Sql/servers', variables('webDbServerNameTidy'))), variables('dbApiVersion')).fullyQualifiedDomainName, ',1433;Initial Catalog=',variables('webDbNameTidy'),';User Id=', parameters('repWebSqlDatabaseUserName'), ';Password=', parameters('repWebSqlDatabasePassword'), ';')]"
+        }
+      },
+      "location": "[parameters('location')]",
+      "dependsOn": [ "repHostNameBinding" ]
+    },
+    {
+      "type": "Microsoft.Sql/servers/firewallRules",
+      "copy": {
+        "name": "customfirewallRules",
+        "count": "[length(parameters('customfirewallRules').items)]"
+      },
+      "apiVersion": "[variables('dbApiVersion')]",
+      "properties": {
+        "startIpAddress": "[parameters('customfirewallRules').items[copyIndex()].start]",
+        "endIpAddress": "[parameters('customfirewallRules').items[copyIndex()].end]"
+      },
+      "name": "[concat(parameters('sqlServerName'), '/', parameters('customfirewallRules').items[copyIndex()].name)]"
+    },
+    {
+      "type": "Microsoft.Sql/servers/firewallRules",
+      "copy": {
+        "name": "customfirewallRules",
+        "count": "[length(parameters('customfirewallRules').items)]"
+      },
+      "apiVersion": "[variables('dbApiVersion')]",
+      "properties": {
+        "startIpAddress": "[parameters('customfirewallRules').items[copyIndex()].start]",
+        "endIpAddress": "[parameters('customfirewallRules').items[copyIndex()].end]"
+      },
+      "name": "[concat(parameters('webSqlServerName'), '/', parameters('customfirewallRules').items[copyIndex()].name)]"
+    }
+  ],
+  "outputs": {
+    "infrastructure": {
+      "type": "object",
+      "value": {
+        "sqlServerFqdn": "[reference(resourceId('Microsoft.Sql/servers', variables('dbServerNameTidy')), variables('dbApiVersion')).fullyQualifiedDomainName]",
+        "webSqlServerFqdn": "[reference(resourceId('Microsoft.Sql/servers', variables('webDbServerNameTidy')), variables('dbApiVersion')).fullyQualifiedDomainName]",
+        "cdStagingWebAppFqdn": "[reference(concat('Microsoft.Web/sites/', variables('cdWebAppNameTidy'), '/slots/', variables('cdStagingSlotNameTidy'))).defaultHostName]",
+        "secureGatewayIp": "[reference(concat('Microsoft.Network/publicIPAddresses/', variables('publicIpNameSecureTidy'))).ipAddress]",
+        "publicGatewayIp": "[reference(concat('Microsoft.Network/publicIPAddresses/', variables('publicIpNamePublicTidy'))).ipAddress]"
+      }
+    }
+  }
+}
